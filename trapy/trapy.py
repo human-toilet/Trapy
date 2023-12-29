@@ -2,15 +2,17 @@
 import socket
 import ipaddress
 
+# complementos
+log = True
+
 class Conn:
-  def __init__(self, address, log=False, sock=None):
+  def __init__(self, address, log=True, sock=None):
     if sock is None:
       sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
      
     self.address = address
-    self.log = log
     self.socket = sock
-
+    self.dataRec = None
 
 def listen(address: str) -> Conn:
   try:
@@ -20,16 +22,20 @@ def listen(address: str) -> Conn:
 
   conn = Conn(address)
   conn.socket.bind((ipaddress.ip_address(address), 1235))  # enlazar el socket a una direccion especifica
+  
+  if log:
+    print(f"Socket bind: {ipaddress.ip_address(address)}")
+
   return conn
 
-def accept(conn) -> Conn:
-    pass
+def accept(conn: Conn) -> Conn:
+  data, addr = conn.socket.recvfrom(1024)  # recibir hasta 1024 bytes de data
 
-class ConnException(Exception):
-  pass
+  if log:
+    print(f"Received data from {addr}: {data}")
 
-
-
+  conn.dataRec = data
+  return conn
 
 def dial(address) -> Conn:
     pass
@@ -45,3 +51,6 @@ def recv(conn: Conn, length: int) -> bytes:
 
 def close(conn: Conn):
     pass
+
+class ConnException(Exception):
+  pass
