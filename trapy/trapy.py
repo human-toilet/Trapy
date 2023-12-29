@@ -1,6 +1,6 @@
 # dependencias
 import socket
-import ipaddress
+from utils import parse_address
 
 # complementos
 log = True
@@ -16,15 +16,15 @@ class Conn:
 
 def listen(address: str) -> Conn:
   try:
-    ip = ipaddress.ip_address(address) # parsear la direccion IP para el socket
+    ip = parse_address(address) # parsear la direccion IP para el socket
   except ValueError as e:
     raise ValueError(f"Invalid IP address: {address}") from e
 
   conn = Conn(address)
-  conn.socket.bind((ipaddress.ip_address(address), 1235))  # enlazar el socket a una direccion especifica
+  conn.socket.bind(parse_address(address))  # enlazar el socket a una direccion especifica
   
   if log:
-    print(f"Socket bind: {ipaddress.ip_address(address)}")
+    print(f"Socket bind: {parse_address(address)}")
 
   return conn
 
