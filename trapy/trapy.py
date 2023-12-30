@@ -3,7 +3,7 @@ import socket
 from utils import parse_address
 
 # complementos
-log = True
+log = False
 
 class Conn:
   def __init__(self, address, log=True, sock=None):
