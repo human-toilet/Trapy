@@ -15,11 +15,6 @@ class Conn:
     self.dataRec = None
 
 def listen(address: str) -> Conn:
-  try:
-    ip = parse_address(address) # parsear la direccion IP para el socket
-  except ValueError as e:
-    raise ValueError(f"Invalid IP address: {address}") from e
-
   conn = Conn(address)
   conn.socket.bind(parse_address(address))  # enlazar el socket a una direccion especifica
   
