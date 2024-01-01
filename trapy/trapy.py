@@ -1,5 +1,6 @@
 # dependencias
 import socket
+import struct
 from utils import parse_address
 
 # complementos
@@ -15,6 +16,11 @@ class Conn:
     self.dataRec = None
 
 def listen(address: str) -> Conn:
+  try:
+    ip = parse_address(address) # parsear la dirección IP para el socket
+  except ValueError as e:
+    raise ValueError(f"Invalid IP address: {address}") from e
+  
   conn = Conn(address)
   conn.socket.bind(parse_address(address))  # enlazar el socket a una direccion especifica
   
@@ -24,7 +30,7 @@ def listen(address: str) -> Conn:
   return conn
 
 def accept(conn: Conn) -> Conn:
-  data, addr = conn.socket.recvfrom(1024)  # recibir hasta 1024 bytes de data
+  data, addr = conn.socket.recvfrom(65535)  # recibir hasta 65535 bytes de data
 
   if log:
     print(f"Received data from {addr}: {data}")
@@ -33,8 +39,18 @@ def accept(conn: Conn) -> Conn:
   return conn
 
 def dial(address) -> Conn:
-    pass
-
+  try:
+    ip = parse_address(address) # parsear la dirección IP para el socket
+  except ValueError as e:
+    raise ValueError(f"Invalid IP address: {address}") from e
+  
+  sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+  conn = Conn(address, sock=sock)
+  
+  # conectar el socket a la dirección remota
+  conn.socket.connect(parse_address(address))
+  
+  return conn
 
 def send(conn: Conn, data: bytes) -> int:
     pass
