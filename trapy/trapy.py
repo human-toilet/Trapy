@@ -1,19 +1,18 @@
 # dependencias
 import socket
-import struct
-from utils import parse_address
+import time
+import select
+from Conn import *
+from utils import *
+from Packet import *
+
+#Data
+PACKET_SIZE = 512 # tamaño de los paquetes 
+WINDOW_SIZE = 5 # tamaño de la ventana deslizante
+TIMEOUT = 0.05 # tiempo de la confirmacion del ack
 
 # complementos
 log = True
-
-class Conn:
-  def __init__(self, address, log=True, sock=None):
-    if sock is None:
-      sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-     
-    self.address = address
-    self.socket = sock
-    self.dataRec = None
 
 def listen(address: str) -> Conn:
   try:
@@ -35,7 +34,7 @@ def accept(conn: Conn) -> Conn:
   if log:
     print(f"Received data from {addr}: {data}")
 
-  conn.dataRec = data
+  conn.dataRec[addr] = data
   return conn
 
 def dial(address) -> Conn:
@@ -53,7 +52,31 @@ def dial(address) -> Conn:
   return conn
 
 def send(conn: Conn, data: bytes) -> int:
-    pass
+  while conn.nextSeqNum < len(data):
+        while conn.nextSeqNum < conn.base + WINDOW_SIZE:
+            packetData = data[conn.nextSeqNum:conn.nextSeqNum + PACKET_SIZE]  # Dividir datos en paquetes
+            packet = CreatePacket(conn, packetData)  # Crear el paquete a enviar
+
+            conn.unacked_packets[conn.nextSeqNum] = packet  # Almacenar paquete no confirmado
+            SendPacket(conn, packet)  # Enviar paquete
+            conn.nextSeqNum += PACKET_SIZE  # Avanzar el número de secuencia
+
+        WaitACK(conn)  # Esperar confirmación de los paquetes enviados
+
+  return len(data)
+
+def WaitACK(conn: Conn):
+  start_time = time.time()  # Tiempo de inicio para el temporizador de espera
+
+  while time.time() - start_time < TIMEOUT:  # Espera durante un tiempo máximo
+      ready = select.select([conn.socket], [], [], TIMEOUT)
+      if ready[0]:  # Si hay algo listo para leer en el socket
+        data, _ = conn.socket.recvfrom(PACKET_SIZE)
+        return
+      else:
+        # Si no se recibe ACK dentro del tiempo TIMEOUT, reenviar paquetes no confirmados
+        for packet in conn.unacked_packets:
+          SendPacket(conn, packet)
 
 
 def recv(conn: Conn, length: int) -> bytes:

@@ -2,6 +2,8 @@
 import socket
 import struct
 import logging
+from Conn import Conn
+from utils import parse_address
 
 def unpack(packet: bytes) -> list:
   try:
@@ -30,8 +32,16 @@ def checkSum(data: bytes) -> int:
       sum += word
 
       # Verificar si hay desbordamiento de bits
-      if checksum > 0xffff:
+      if sum > 0xffff:
           sum = (sum & 0xffff) + 1
 
   checksum = ~sum & 0xffff # Complementar el resultado final para obtener el checksum en complemento a uno
   return sum
+
+def SendPacket(conn: Conn, packet: bytes):
+  conn.socket.sendto(packet, parse_address(conn.address))
+
+def CreatePacket(conn: Conn, packetData: bytes) -> bytes:
+  seqNumber = conn.nextSeqNum
+  packet = struct.pack('I', seqNumber) + packetData
+  return packet
