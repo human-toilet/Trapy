@@ -9,4 +9,4 @@ class Conn:
     self.socket = sock
     self.base = 0  # puntero base de la ventana
     self.nextSeqNum = 0  # siguiente número de secuencia a enviar
-    self.unacked_packets = []  # almacenar paquetes no confirmados
+    self.unackedPackets = []  # almacenar paquetes no confirmados

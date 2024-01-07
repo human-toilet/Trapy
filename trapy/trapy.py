@@ -4,7 +4,7 @@ import time
 import select
 from Conn import *
 from utils import *
-from Packet import *
+from packet import *
 
 #Data
 PACKET_SIZE = 512 # tamaño de los paquetes 
@@ -57,7 +57,7 @@ def send(conn: Conn, data: bytes) -> int:
             packetData = data[conn.nextSeqNum:conn.nextSeqNum + PACKET_SIZE]  # Dividir datos en paquetes
             packet = CreatePacket(conn, packetData)  # Crear el paquete a enviar
 
-            conn.unacked_packets[conn.nextSeqNum] = packet  # Almacenar paquete no confirmado
+            conn.unackedPackets[conn.nextSeqNum] = packet  # Almacenar paquete no confirmado
             SendPacket(conn, packet)  # Enviar paquete
             conn.nextSeqNum += PACKET_SIZE  # Avanzar el número de secuencia
 
@@ -75,12 +75,29 @@ def WaitACK(conn: Conn):
         return
       else:
         # Si no se recibe ACK dentro del tiempo TIMEOUT, reenviar paquetes no confirmados
-        for packet in conn.unacked_packets:
+        for packet in conn.unackedPackets:
           SendPacket(conn, packet)
 
-
 def recv(conn: Conn, length: int) -> bytes:
-    pass
+  received_data = b""
+
+  while len(received_data) < length:
+      packet, _ = conn.socket.recvfrom(PACKET_SIZE)
+      header = packet[:4]
+      seq_number = struct.unpack("!I", header)[0]
+      data = packet[4:]
+
+      if seq_number == conn.expected_seq_num:
+          received_data += data
+          conn.expected_seq_num += len(data) 
+          # Enviar ACK por el paquete recibido
+          send_ack(conn, seq_number + len(data))
+
+  return received_data[:length]
+
+def send_ack(conn: Conn, ack_number: int):
+  ack_packet = struct.pack("!I", ack_number)
+  conn.socket.sendto(ack_packet, conn.address)
 
 
 def close(conn: Conn):
