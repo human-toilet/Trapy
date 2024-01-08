@@ -1,10 +1,8 @@
 # dependencias
-import socket
-import time
-import select
-from Conn import *
+from conn import *
 from utils import *
 from packet import *
+import time
 
 # manejo de datos
 PACKET_SIZE = 512 # tamaño de los paquetes 
@@ -22,6 +20,7 @@ log = True
 def listen(address: str) -> Conn:
   try:
     ip = parse_address(address) # parsear la dirección IP para el socket
+
   except ValueError as e:
     raise ValueError(INVALID_IP_ADDRESS %address) from e
   
@@ -61,17 +60,24 @@ def HandleFlags(conn: Conn):
         
 def dial(address) -> Conn:
   try:
-    ip = parse_address(address) # parsear la dirección IP para el socket
-
+   ip = parse_address(address) # parsear la dirección IP para el socket
+   
   except ValueError as e:
-    raise ValueError(f"Invalid IP address: {address}") from e
+     raise ValueError(INVALID_IP_ADDRESS %address) from e
   
-  sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-  conn = Conn(address, sock=sock)
-  
-  # conectar el socket a la dirección remota
-  conn.socket.connect(parse_address(address))
-  
+  ipDest, portDest = parse_address(address) # ip y puerto del server
+  ip = '127.0.0.1' # host ip
+  port = 8000 # host port
+  pack = Packet(ip, ipDest, port, portDest, 1000, 1500, 1 << 3, WINDOW_SIZE, b'') # crear el paquete con el flag SYN activado
+  conn = Conn(f'{ip}:{port}') # crear la conexion del cliente
+  conn.socket.sendto(pack, parse_address(f'{ipDest}:{portDest}')) # enviar el paquete al servidor
+  time.sleep(1)
+  conn = listen(f'{ip}:{port}') # escuchar respuesta del servidor
+  print("Waiting data")
+  data, _ = conn.socket.recvfrom(255) # recibir data del servidor
+  data = data[20:]
+  packData = Unpack(data) # desempaquetar los datos
+  print(packData)
   return conn
 
 def send(conn: Conn, data: bytes) -> int:

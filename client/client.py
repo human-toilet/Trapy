@@ -5,7 +5,7 @@ def send_data_to_server(address, data):
         client_socket.sendto(data.encode(), address)
 
 if __name__ == "__main__":
-    server_address = ('127.0.0.1', 9000)  # Cambia esto por la dirección y puerto del servidor
+    server_address = ('127.0.0.1', 8888)  # Cambia esto por la dirección y puerto del servidor
     message = "Hello, server!"  # Mensaje que deseas enviar
 
     send_data_to_server(server_address, message)

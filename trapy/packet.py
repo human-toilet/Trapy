@@ -1,7 +1,7 @@
 # dependencias
 import socket
 import struct
-from Conn import Conn
+from trapy.conn import Conn
 from utils import *
 
 class Packet:
