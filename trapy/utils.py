@@ -1,3 +1,7 @@
+import socket
+import struct
+import logging
+
 def parse_address(address):
   host, port = address.split(':')
   
@@ -6,7 +10,7 @@ def parse_address(address):
       
   return host, int(port)
 
-def checkSum(data: bytes) -> int:
+def CheckSum(data: bytes) -> int:
   sum = 0
 
   # Si la longitud de los datos es impar, se agrega un byte nulo al final
@@ -24,3 +28,19 @@ def checkSum(data: bytes) -> int:
 
   sum = ~sum & 0xffff # Complementar el resultado final para obtener el checksum en complemento a uno
   return sum
+
+def Unpack(packet: bytes) -> list:
+  try:
+    tcpHeaders = struct.unpack('!2h2i2hi', packet[12:32])
+    pack = [
+        packet[0:4], # token de verificacion
+        socket.inet_ntoa(packet[4:8]), # ip de origen
+        socket.inet_ntoa(packet[8:12]), # ip de destino
+    ] + list(tcpHeaders)
+    pack.append(packet[32:]) # datos recibidos
+    return pack
+  
+  except Exception as err:
+      logging.error(err)
+
+  return None
