@@ -95,22 +95,29 @@ def dial(address) -> Conn:
   return conn
 
 def send(conn: Conn, data: bytes) -> int:
+  ipSrc, portSrc = parse_address(conn.address)
+  ipDest, portDest = parse_address(conn.dest)
+  fragData = fragment_data(data, PACKET_SIZE)
+  seqNum = 0
+  ackNum = 0
 
-  conn.sendTime = 1
-  
-  conn.socket.sendto(data, parse_address(conn.address))
-  while True:
 
-    while conn.sendTimer.running() and not conn.sendTimer.timeout(): None
-    break
-  if log:
-    print('Waiting data')
-  
-  
+  for i in fragData:
+    pack = Packet(ipSrc, ipDest, portSrc, portDest, seqNum, ackNum, 16, PACKET_SIZE, i)
+    conn.socket.sendto(pack.CreatePacket(), parse_address(conn.dest))
 
+    if log:
+      print('Waiting data')
+
+    data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+    packet = Unpack(data)
+    seqNum = packet[6]
+    ackNum = packet[5] + 1
+
+  
   return len(data)
 
-def recvConfWithCond()
+'''def recvConfWithCond()
 
 def recvConf(conn: Conn, timelimit):
   conn.socket.settimeout(1)
@@ -123,15 +130,17 @@ def recvConf(conn: Conn, timelimit):
         return (None, None)
     packet = Unpack(data)
     if ((packet == conn.) or unknwn_source):
-        return (packet, address)
+        return (packet, address)'''
   
-
 def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
+  dataRec = b''
+
   if log:
     print('Waiting data')
 
   while True:
     data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+    dataRec += data
 
     if data[:4] == b'\x00\x0f\x00\x0f':
       # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:seqNum 6:ACK 7:flags 8:winSize 9:CheckSum 10:data
@@ -143,30 +152,23 @@ def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
           ipDest, portDest = parse_address(conn.dest)
 
           if pack[7] & 1:
-            conn.socket.close()
-            break
-
+            return dataRec
+            
           if data[6] == conn.expectedNum: # pack[6] se refiere al ack
             conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, pack[6], pack[5] + 1, 16, 
                                            PACKET_SIZE, dataSend).CreatePacket(),
                           parse_address(conn.dest))
+          
+          if(pack[7] & 1): # si se envio  el paquete final el flag FIN activo
+            return dataRec
 
         if dataSend == b'':
           conn.dest = pack[5] + 1
-          return data
 
-        conn.dest = pack[5] + len(dataSend)
-        return data
-
-      return b''
+        else:
+          conn.dest = pack[5] + len(dataSend)
       
 def close(conn: Conn):
-  ipSrc, portSrc = parse_address(conn.address)
-  ipDest, portDest = parse_address(conn.dest)
-  # si la conexion se cierra enviar el flag FIN activo
-  conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, 0, 0, 1, 
-                        PACKET_SIZE, b'').CreatePacket(),
-                parse_address(conn.dest))
   conn.socket.close()
 
 class ConnException(Exception):
