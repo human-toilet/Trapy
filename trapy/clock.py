@@ -28,3 +28,5 @@ class Timer(object):
       
       else:
           return time.time() - self._start_time >= self._duration
+  def clock(self):
+      return time.time() - self._start_time

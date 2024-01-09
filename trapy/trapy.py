@@ -102,14 +102,17 @@ def send(conn: Conn, data: bytes) -> int:
   ackNum = 0
 
 
-  for i in fragData:
-    pack = Packet(ipSrc, ipDest, portSrc, portDest, seqNum, ackNum, 16, PACKET_SIZE, i)
+  for i in range(len(fragData)):
+    pack = Packet(ipSrc, ipDest, portSrc, portDest, seqNum, ackNum, 16, PACKET_SIZE, fragData[i])
     conn.socket.sendto(pack.CreatePacket(), parse_address(conn.dest))
 
     if log:
       print('Waiting data')
 
-    data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+    data = recvConf(conn, 1)
+    if data == None:
+      i = i-1
+      continue   #conn.socket.recvfrom(PACKET_SIZE)[0][20:]
     packet = Unpack(data)
     seqNum = packet[6]
     ackNum = packet[5] + 1
@@ -117,20 +120,20 @@ def send(conn: Conn, data: bytes) -> int:
   
   return len(data)
 
-'''def recvConfWithCond()
-
 def recvConf(conn: Conn, timelimit):
-  conn.socket.settimeout(1)
-  timer = Timer(timelimit)
-  timer.start(timelimit)
+  ipdest, portdest = parse_address(conn.dest)
+  conn.sendTime.init(timelimit)
+  conn.sendTime.start()
   while True:
+    conn.socket.settimeout(timelimit)
     try:
         data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
     except socket.timeout:
         return (None, None)
     packet = Unpack(data)
-    if ((packet == conn.) or unknwn_source):
-        return (packet, address)'''
+    if (packet[2] == portdest):
+        return data
+    timelimit = timelimit - conn.sendTime.clock()
   
 def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
   dataRec = b''
