@@ -31,12 +31,12 @@ def CheckSum(data: bytes) -> int:
 
 def Unpack(packet: bytes) -> list:
   try:
-    tcpHeaders = struct.unpack('!2h2i2hi', packet[12:32])
+    tcpHeader = struct.unpack('!2h2i2hi', packet[12:32])
     pack = [
         packet[0:4], # token de verificacion
         socket.inet_ntoa(packet[4:8]), # ip de origen
         socket.inet_ntoa(packet[8:12]), # ip de destino
-    ] + list(tcpHeaders)
+    ] + list(tcpHeader)
     pack.append(packet[32:]) # datos recibidos
     return pack
   

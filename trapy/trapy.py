@@ -11,7 +11,7 @@ TIMEOUT = 0.05 # tiempo de la confirmacion del ack
 
 # errores
 INVALID_IP_ADDRESS = "Invalid IP address: %s"
-FIRST_CALL_ACCEPT = "First call accept with %s"
+FIRST_CONNECT = "Can't send data whithout previous connecting to the server"
 CONNECTION_IN_USE = "Connection already in use"
 
 # complementos
@@ -40,23 +40,29 @@ def HandleFlags(conn: Conn):
   if conn.state:
     raise ConnException(CONNECTION_IN_USE)
   
+  if log:
+    print('Waiting data')
+
   data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
 
   if data[:4] == b'\x00\x0f\x00\x0f':
-    # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:total 6:ACK/SeqNum 7:flags 8:winSize 9:CheckSum 10:data
+    # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:SeqNum  6:ACK/7:flags 8:winSize 9:CheckSum 10:data
     pack: list = Unpack(data)
+    print(pack)
 
     if CheckSum(data[:28] + data[32:]) == pack[9]:
       flags = pack[7]
+      conn.dest = f'{pack[2]}:{pack[4]}'
+      ipSrc, portSrc = parse_address(conn.address)
+      ipDest, portDest = parse_address(conn.dest)
 
-      if flags & (1 << 3): # si el flag SYN esta activo
-        conn.socket.sendto(Packet(pack[1], pack[2], pack[3], pack[4], 0, 0, 1 << 6, 
-                                        WINDOW_SIZE, b'').CreatePacket(),
-                      parse_address(f'{pack[2]}:{pack[4]}'))
-      
-      elif flags & (1 << 6): # si el flag ACK esta activo
-        if conn.seqNum <= pack[6]:
-          conn.seqNum = pack[6] + 1
+      # flags => 1.URG  2.ACK  3.PSH  4.RST  5.SYN  6.FIN
+      if flags & (1 << 1): # si el flag SYN esta activo
+        time.sleep(4)
+        conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, 0, pack[5] + 1, 18, 
+                                        255, b'').CreatePacket(),
+                      parse_address(conn.dest))
+        conn.expectedNum = pack[5] + 1
         
 def dial(address) -> Conn:
   try:
@@ -68,67 +74,77 @@ def dial(address) -> Conn:
   ipDest, portDest = parse_address(address) # ip y puerto del server
   ip = '127.0.0.1' # host ip
   port = 8000 # host port
-  pack = Packet(ip, ipDest, port, portDest, 1000, 1500, 1 << 3, WINDOW_SIZE, b'') # crear el paquete con el flag SYN activado
+  pack = Packet(ip, ipDest, port, portDest, 0, 0, 2, 255, b'') # crear el paquete con el flag SYN activado
   conn = Conn(f'{ip}:{port}') # crear la conexion del cliente
-  conn.socket.sendto(pack, parse_address(f'{ipDest}:{portDest}')) # enviar el paquete al servidor
-  time.sleep(1)
+  conn.socket.sendto(pack.CreatePacket(), parse_address(f'{ipDest}:{portDest}')) # enviar el paquete al servidor
+  time.sleep(3)
   conn = listen(f'{ip}:{port}') # escuchar respuesta del servidor
-  print("Waiting data")
+  
+  if log:
+    print("Waiting data")
+
   data, _ = conn.socket.recvfrom(255) # recibir data del servidor
   data = data[20:]
   packData = Unpack(data) # desempaquetar los datos
-  print(packData)
+  
+  if log:
+    print(packData)
+    print('Succesful connection')
+
   return conn
 
 def send(conn: Conn, data: bytes) -> int:
-  """while conn.nextSeqNum < len(data):
-    while conn.nextSeqNum < conn.base + WINDOW_SIZE:
-      packetData = data[conn.nextSeqNum:conn.nextSeqNum + PACKET_SIZE]  # Dividir datos en paquetes
-      packet = CreatePacket(conn, packetData)  # Crear el paquete a enviar
-      conn.unackedPackets[conn.nextSeqNum] = packet  # Almacenar paquete no confirmado
-      SendPacket(conn, packet)  # Enviar paquete
-      conn.nextSeqNum += PACKET_SIZE  # Avanzar el número de secuenci
+  conn.socket.sendto(data, parse_address(conn.address))
 
-    WaitACK(conn)  # Esperar confirmación de los paquetes enviado
+  if log:
+    print('Waiting data')
+  
 
-  return len(data)
+def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
+  if log:
+    print('Waiting data')
 
-def WaitACK(conn: Conn):
-  start_time = time.time()  # Tiempo de inicio para el temporizador de espera
+  while True:
+    data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
 
-  while time.time() - start_time < TIMEOUT:  # Espera durante un tiempo máximo
-      ready = select.select([conn.socket], [], [], TIMEOUT)
-      if ready[0]:  # Si hay algo listo para leer en el socket
-        data, _ = conn.socket.recvfrom(PACKET_SIZE)
-        return
-      else:
-        # Si no se recibe ACK dentro del tiempo TIMEOUT, reenviar paquetes no confirmados
-        for packet in conn.unackedPackets:
-          SendPacket(conn, packet)
-"""
-def recv(conn: Conn, length: int) -> bytes:
-  """received_data = b""
+    if data[:4] == b'\x00\x0f\x00\x0f':
+      # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:seqNum 6:ACK 7:flags 8:winSize 9:CheckSum 10:data
+      if len(data) <= length:
+        pack: list = Unpack(data)
 
-  while len(received_data) < length:
-    packet, _ = conn.socket.recvfrom(PACKET_SIZE)
-    header = packet[:4]
-    seq_number = struct.unpack("!I", header)[0]
-    data = packet[4:]
+        if CheckSum(data[:28] + data[32:]) == pack[9]:
+          ipSrc, portSrc = parse_address(conn.address)
+          ipDest, portDest = parse_address(conn.dest)
 
-    if seq_number == conn.nextSeqNum:
-        received_data += data
-        conn.nextSeqNum += len(data) 
-        # Enviar ACK por el paquete recibido
-        send_ack(conn, seq_number + len(data))
+          if pack[7] & 1:
+            conn.socket.close()
+            break
 
-  return received_data[:length]"""
+          if data[6] == conn.expectedNum: # pack[6] se refiere al ack
+            conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, pack[6], pack[5] + 1, 16, 
+                                           PACKET_SIZE, dataSend).CreatePacket(),
+                          parse_address(conn.dest))
 
+        if dataSend == b'':
+          conn.dest = pack[5] + 1
+          return data
+
+        conn.dest = pack[5] + len(dataSend)
+        return data
+
+      return b''
+      
 def close(conn: Conn):
+  ipSrc, portSrc = parse_address(conn.address)
+  ipDest, portDest = parse_address(conn.dest)
+  # si la conexion se cierra enviar el flag FIN activo
+  conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, 0, 0, 1, 
+                        PACKET_SIZE, b'').CreatePacket(),
+                parse_address(conn.dest))
   conn.socket.close()
 
 class ConnException(Exception):
   pass
-
 
 
 
