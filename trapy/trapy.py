@@ -1,9 +1,10 @@
 # dependencias
+import time
 from conn import *
 from utils import *
 from packet import *
-import time
-
+#from timer import *
+import threading
 # manejo de datos
 PACKET_SIZE = 512 # tamaño de los paquetes 
 WINDOW_SIZE = 5 # tamaño de la ventana deslizante
@@ -94,10 +95,16 @@ def dial(address) -> Conn:
   return conn
 
 def send(conn: Conn, data: bytes) -> int:
-  conn.socket.sendto(data, parse_address(conn.address))
 
+  conn.socket.sendto(data, parse_address(conn.address))
   if log:
     print('Waiting data')
+
+  data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+
+  return len(data)
+
+ 
   
 
 def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
