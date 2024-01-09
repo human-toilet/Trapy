@@ -3,7 +3,7 @@ import time
 from conn import *
 from utils import *
 from packet import *
-#from timer import *
+from clock import *
 import threading
 # manejo de datos
 PACKET_SIZE = 512 # tamaño de los paquetes 
@@ -96,15 +96,34 @@ def dial(address) -> Conn:
 
 def send(conn: Conn, data: bytes) -> int:
 
+  conn.sendTime = 1
+  
   conn.socket.sendto(data, parse_address(conn.address))
+  while True:
+
+    while conn.sendTimer.running() and not conn.sendTimer.timeout(): None
+    break
   if log:
     print('Waiting data')
-
-  data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+  
+  
 
   return len(data)
 
- 
+def recvConfWithCond()
+
+def recvConf(conn: Conn, timelimit):
+  conn.socket.settimeout(1)
+  timer = Timer(timelimit)
+  timer.start(timelimit)
+  while True:
+    try:
+        data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+    except socket.timeout:
+        return (None, None)
+    packet = Unpack(data)
+    if ((packet == conn.) or unknwn_source):
+        return (packet, address)
   
 
 def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
