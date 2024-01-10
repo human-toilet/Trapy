@@ -5,10 +5,10 @@ from utils import *
 from packet import *
 from clock import *
 import threading
+
 # manejo de datos
 PACKET_SIZE = 512 # tamaño de los paquetes 
-WINDOW_SIZE = 5 # tamaño de la ventana deslizante
-TIMEOUT = 0.05 # tiempo de la confirmacion del ack
+TIMEOUT = 3 # tiempo de la confirmacion del ack
 
 # errores
 INVALID_IP_ADDRESS = "Invalid IP address: %s"
@@ -124,12 +124,11 @@ def send(conn: Conn, data: bytes) -> int:
     if log:
       print('Waiting data')
 
-    dat = recvConf(conn, 3)
+    dat = recvConf(conn, TIMEOUT)
     if dat == None:
       i = i-1
       continue   #conn.socket.recvfrom(PACKET_SIZE)[0][20:]
 
-    print(dat)
     packet = Unpack(dat)
     print(packet)
 
