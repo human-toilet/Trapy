@@ -113,6 +113,11 @@ def send(conn: Conn, data: bytes) -> int:
       i = i-1
       continue   #conn.socket.recvfrom(PACKET_SIZE)[0][20:]
     packet = Unpack(data)
+
+    if pack[5] != ackNum: # si el numero de secuencia del paquete que entro non coincide
+      i -= 1              # con el numero de ack que tengo reenvia el paquete
+      continue
+
     seqNum = packet[6]
     ackNum = packet[5] + 1
 
