@@ -34,10 +34,10 @@ def listen(address: str) -> Conn:
   return conn
 
 def accept(conn: Conn) -> Conn:
-  HandleFlags(conn)
+  HandleAccept(conn)
   return conn
 
-def HandleFlags(conn: Conn):
+def HandleAccept(conn: Conn):
   if conn.state:
     raise ConnException(CONNECTION_IN_USE)
   
@@ -53,17 +53,26 @@ def HandleFlags(conn: Conn):
 
     if CheckSum(data[:28] + data[32:]) == pack[9]:
       flags = pack[7]
-      conn.dest = f'{pack[2]}:{pack[4]}'
+      conn.dest = f'{pack[1]}:{pack[3]}'
       ipSrc, portSrc = parse_address(conn.address)
       ipDest, portDest = parse_address(conn.dest)
 
       # flags => 1.URG  2.ACK  3.PSH  4.RST  5.SYN  6.FIN
       if flags & (1 << 1): # si el flag SYN esta activo
-        time.sleep(4)
+        time.sleep(1)
         conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, 0, pack[5] + 1, 18, 
                                         255, b'').CreatePacket(),
                       parse_address(conn.dest))
-        conn.expectedNum = pack[5] + 1
+        conn.expectedNum += 1
+  
+  print('Waiting data')
+  data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
+  time.sleep(1)
+  pack: list = Unpack(data)
+  print(pack)
+  
+  if pack[5] == conn.expectedNum:
+    print('Succesful connection')
         
 def dial(address) -> Conn:
   try:
@@ -73,24 +82,31 @@ def dial(address) -> Conn:
      raise ValueError(INVALID_IP_ADDRESS %address) from e
   
   ipDest, portDest = parse_address(address) # ip y puerto del server
-  ip = '127.0.0.1' # host ip
+  ip = '127.0.0.2' # host ip
   port = 8000 # host port
   pack = Packet(ip, ipDest, port, portDest, 0, 0, 2, 255, b'') # crear el paquete con el flag SYN activado
   conn = Conn(f'{ip}:{port}') # crear la conexion del cliente
   conn.socket.sendto(pack.CreatePacket(), parse_address(f'{ipDest}:{portDest}')) # enviar el paquete al servidor
-  time.sleep(3)
   conn = listen(f'{ip}:{port}') # escuchar respuesta del servidor
   
   if log:
     print("Waiting data")
 
-  data, _ = conn.socket.recvfrom(255) # recibir data del servidor
+  data, _ = conn.socket.recvfrom(PACKET_SIZE) # recibir data del servidor
   data = data[20:]
   packData = Unpack(data) # desempaquetar los datos
-  
+  conn.dest = f'{ipDest}:{portDest}'
+
   if log:
     print(packData)
-    print('Succesful connection')
+
+  if packData[7] == 18 and packData[5] == 0:
+    time.sleep(1)
+    conn.socket.sendto(Packet(ip, ipDest, port, portDest, packData[6], packData[5] + 1, 16, 255, b'').CreatePacket(),
+                  parse_address(conn.dest))
+  
+  time.sleep(1)
+  print('Succesful connection')
 
   return conn
 
@@ -108,36 +124,40 @@ def send(conn: Conn, data: bytes) -> int:
     if log:
       print('Waiting data')
 
-    data = recvConf(conn, 1)
-    if data == None:
+    dat = recvConf(conn, 3)
+    if dat == None:
       i = i-1
       continue   #conn.socket.recvfrom(PACKET_SIZE)[0][20:]
-    packet = Unpack(data)
 
-    if pack[5] != ackNum: # si el numero de secuencia del paquete que entro non coincide
-      i -= 1              # con el numero de ack que tengo reenvia el paquete
+    print(dat)
+    packet = Unpack(dat)
+    print(packet)
+
+    if packet[5] != ackNum: # si el numero de secuencia del paquete que entro non coincide
+      i -= 1                # con el numero de ack que tengo reenvia el paquete
       continue
 
     seqNum = packet[6]
     ackNum = packet[5] + 1
 
-    if pack[7] & 1: # ya no se pueden enviar mas datos
+    if packet[7] & 1: # ya no se pueden enviar mas datos
       return PACKET_SIZE * i
 
   return len(data)
 
 def recvConf(conn: Conn, timelimit):
   ipdest, portdest = parse_address(conn.dest)
-  conn.sendTime.init(timelimit)
+  conn.sendTime = Timer(timelimit)
   conn.sendTime.start()
   while True:
     conn.socket.settimeout(timelimit)
     try:
         data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
     except socket.timeout:
-        return (None, None)
+        return None
     packet = Unpack(data)
-    if (packet[2] == portdest):
+    
+    if (packet[3] == portdest):
         return data
     timelimit = timelimit - conn.sendTime.clock()
   
@@ -149,26 +169,30 @@ def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
   
   ipSrc, portSrc = parse_address(conn.address)
   ipDest, portDest = parse_address(conn.dest)
+  expectedACK = 0
 
   while True:
     data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
-    dataRec += data
+    time.sleep(1)
 
     if data[:4] == b'\x00\x0f\x00\x0f':
       # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:seqNum 6:ACK 7:flags 8:winSize 9:CheckSum 10:data
       if len(dataRec) <= length:
         pack: list = Unpack(data)
+        dataRec += pack[10]
+        print(pack)
 
         if CheckSum(data[:28] + data[32:]) == pack[9]:
           if pack[7] & 1:
             return dataRec
             
-          if data[6] == conn.expectedNum: # pack[6] se refiere al ack
+          if data[6] == expectedACK: # pack[6] se refiere al ack
             conn.socket.sendto(Packet(ipSrc, ipDest, portSrc, portDest, pack[6], pack[5] + 1, 16, 
                                            PACKET_SIZE, dataSend).CreatePacket(),
                           parse_address(conn.dest))
+            expectedACK += 1
           
-          if(pack[7] & 1): # si se envio  el paquete final el flag FIN activo
+          if(pack[7] & 1): # si se envio en el paquete final el flag FIN activo
             return dataRec
 
         if dataSend == b'':

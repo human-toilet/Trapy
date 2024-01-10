@@ -1,12 +1,12 @@
 import time
 
-class Timer(object):
+class Timer:
   TIMER_STOP = -1
-  
-  def init(self, duration):
+
+  def __init__(self, duration):
       self._start_time = self.TIMER_STOP
       self._duration = duration
-      
+    
   # inicia el timer
   def start(self):
       if self._start_time == self.TIMER_STOP:

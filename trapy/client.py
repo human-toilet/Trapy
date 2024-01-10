@@ -1,3 +1,4 @@
-from trapy import dial
+from trapy import *
 
-dial('127.0.0.1:8888')
+conn = dial('127.0.0.1:8888')
+send(conn, b'sex')
