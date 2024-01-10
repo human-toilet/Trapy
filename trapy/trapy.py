@@ -101,7 +101,6 @@ def send(conn: Conn, data: bytes) -> int:
   seqNum = 0
   ackNum = 0
 
-
   for i in range(len(fragData)):
     pack = Packet(ipSrc, ipDest, portSrc, portDest, seqNum, ackNum, 16, PACKET_SIZE, fragData[i])
     conn.socket.sendto(pack.CreatePacket(), parse_address(conn.dest))
@@ -117,7 +116,9 @@ def send(conn: Conn, data: bytes) -> int:
     seqNum = packet[6]
     ackNum = packet[5] + 1
 
-  
+    if pack[7] & 1: # ya no se pueden enviar mas datos
+      return PACKET_SIZE * i
+
   return len(data)
 
 def recvConf(conn: Conn, timelimit):
@@ -140,6 +141,9 @@ def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
 
   if log:
     print('Waiting data')
+  
+  ipSrc, portSrc = parse_address(conn.address)
+  ipDest, portDest = parse_address(conn.dest)
 
   while True:
     data = conn.socket.recvfrom(PACKET_SIZE)[0][20:]
@@ -147,13 +151,10 @@ def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
 
     if data[:4] == b'\x00\x0f\x00\x0f':
       # 0:token  1:source 2:destination 3:sourcePort 4:destPort 5:seqNum 6:ACK 7:flags 8:winSize 9:CheckSum 10:data
-      if len(data) <= length:
+      if len(dataRec) <= length:
         pack: list = Unpack(data)
 
         if CheckSum(data[:28] + data[32:]) == pack[9]:
-          ipSrc, portSrc = parse_address(conn.address)
-          ipDest, portDest = parse_address(conn.dest)
-
           if pack[7] & 1:
             return dataRec
             
@@ -170,6 +171,10 @@ def recv(conn: Conn, length: int, dataSend: bytes = b'') -> bytes:
 
         else:
           conn.dest = pack[5] + len(dataSend)
+      
+      else:
+        packet = Packet(ipSrc, ipDest, portSrc, portDest, 0, 0, 1, 255, b'')
+        conn.socket.sendto(packet, parse_address(conn.dest))
       
 def close(conn: Conn):
   conn.socket.close()
