@@ -27,16 +27,3 @@ class Packet:
                                      self.seqNumber, self.ack, self.flags, self.winSize, CheckSum(ipHeader + tcpHeaderNocheckSum + self.data))
     return ipHeader + tcpHeader + self.data
 
-""" 
-if __name__ == "__main__":
-    p = Packet('127.0.0.1', '127.0.0.1', 80, 3000, 45221, 5421, 0, 512, b'SEX')
-
-    pack = p.CreatePacket()
-    unpack = Unpack(pack)
-
-    print(pack)
-    print(unpack)
-"""
-
-def SendPacket(conn: Conn, packet: bytes):
-  conn.socket.sendto(packet, parse_address(conn.address))
